@@ -3,8 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-# the final version
-
 import hydra
 import numpy as np
 import torch
@@ -349,16 +347,10 @@ class MMCSAgent:
     def update_encoder_mmcs(self, obs, obs_prime, step, action):
         metrics = dict()
 
-        # ------------------------------
-        # 特征提取（编码器）
-        # ------------------------------
         features = self.encoder(obs)
         features_prime = self.encoder(obs_prime)
         condition = step >= self.mask_steps
 
-        # ------------------------------
-        # 掩码器处理（条件激活）
-        # ------------------------------
         masks_sup = self.masker(features).detach()
         masks_sup_prime = self.masker(features_prime).detach() if condition else torch.ones_like(features_prime)
         features_sup = features * masks_sup
@@ -366,7 +358,6 @@ class MMCSAgent:
         masks_inf_prime = torch.ones_like(masks_sup_prime) - masks_sup_prime
         features_inf_prime = features_prime * masks_inf_prime
 
-        # 计算充分性损失
         information_suff_loss = self.inv_model(features, features_sup_prime, action)
         # obs_cat_sup = torch.cat((masks_sup.detach(), features_sup_prime.detach()), dim=1) # obs_cat_sup ([256, 512])
         # obs_cat_sup = torch.cat((features, features_sup_prime), dim=1)
