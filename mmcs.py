@@ -351,16 +351,15 @@ class MMCSAgent:
         features_prime = self.encoder(obs_prime)
         condition = step >= self.mask_steps
 
-        masks_sup = self.masker(features).detach()
-        masks_sup_prime = self.masker(features_prime).detach() if condition else torch.ones_like(features_prime)
+        masks_sup = self.masker(features)
+        masks_sup_prime = self.masker(features_prime) if condition else torch.ones_like(features_prime)
         features_sup = features * masks_sup
         features_sup_prime = features_prime * masks_sup_prime
         masks_inf_prime = torch.ones_like(masks_sup_prime) - masks_sup_prime
         features_inf_prime = features_prime * masks_inf_prime
 
-        information_suff_loss = self.inv_model(features, features_sup_prime, action)
-        # obs_cat_sup = torch.cat((masks_sup.detach(), features_sup_prime.detach()), dim=1) # obs_cat_sup ([256, 512])
-        # obs_cat_sup = torch.cat((features, features_sup_prime), dim=1)
+        information_suff_loss = self.inv_model(features, features_sup_prime.detach(), action)
+        # obs_cat_sup = torch.cat((features, features_sup_prime.detach()), dim=1)
         # behavioural_action_sup = self.predictor(obs_cat_sup)
         # behavioural_action_sup = F.normalize(behavioural_action_sup, dim=1, p=2)
         # action_norm = F.normalize(action, dim=1, p=2)
@@ -368,38 +367,39 @@ class MMCSAgent:
 
         if condition:
             for _ in range(self.num_cnce_iter): 
-                y_emb1 = self.linears_club_x1x2_cond[1](features)
+                y_emb1 = self.linears_club_x1x2_cond[1](features.detach())
                 cnce1_loss = self.club_x1x2_cond1(
-                    torch.cat([self.linears_club_x1x2_cond[0](features_inf_prime), y_emb1], dim=1),
+                    torch.cat([self.linears_club_x1x2_cond[0](features_inf_prime.detach()), y_emb1], dim=1),
                     action.detach()
                 )
-                y_emb2 = self.linears_club_x1x2_cond[4](torch.cat([features, action.detach()], dim=1))
+                y_emb2 = self.linears_club_x1x2_cond[4](torch.cat([features.detach(), action.detach()], dim=1))
                 cnce2_loss = self.club_x1x2_cond2(
-                    torch.cat([self.linears_club_x1x2_cond[2](features_sup_prime), y_emb2], dim=1),
-                    self.linears_club_x1x2_cond[3](features_inf_prime)
+                    torch.cat([self.linears_club_x1x2_cond[2](features_sup_prime.detach()), y_emb2], dim=1),
+                    self.linears_club_x1x2_cond[3](features_inf_prime.detach())
                 )
                 cnce_loss = cnce1_loss + cnce2_loss
-
-                self.linears_club_x1x2_cond_opt.zero_grad(set_to_none=True)
+                self.linears_club_x1x2_cond_opt.zero_grad()
                 cnce_loss.backward(retain_graph=True)
                 self.linears_club_x1x2_cond_opt.step()
 
-            club1_loss = self.club_x1x2_cond1.learning_loss(torch.cat([self.linears_club_x1x2_cond[0](features_inf_prime.detach()), y_emb1.detach()], dim=1), action.detach())
+            club1_loss = self.club_x1x2_cond1.learning_loss(torch.cat([self.linears_club_x1x2_cond[0](features_inf_prime), y_emb1.detach()], dim=1), action.detach())
             
-            club2_loss = self.club_x1x2_cond2.learning_loss(torch.cat([self.linears_club_x1x2_cond[2](features_sup_prime.detach()), y_emb2.detach()], dim=1), 
-                                                            self.linears_club_x1x2_cond[3](features_inf_prime.detach()))
-
+            club2_loss = self.club_x1x2_cond2.learning_loss(torch.cat([self.linears_club_x1x2_cond[2](features_sup_prime), y_emb2.detach()], dim=1), 
+                                                            self.linears_club_x1x2_cond[3](features_inf_prime))
             club_loss = club1_loss + club2_loss
 
+            total_loss = information_suff_loss + club_loss
             self.club_opt.zero_grad()
             self.masker_opt.zero_grad()
-            club_loss.backward()
+            self.encoder_opt.zero_grad()
+            total_loss.backward()
             self.club_opt.step()
             self.masker_opt.step()
-
-        self.encoder_opt.zero_grad()
-        information_suff_loss.backward()
-        self.encoder_opt.step()
+            self.encoder_opt.step()
+        else:
+            self.encoder_opt.zero_grad()
+            information_suff_loss.backward()
+            self.encoder_opt.step()
 
         return metrics
 
