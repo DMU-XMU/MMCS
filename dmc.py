@@ -11,8 +11,8 @@ from dm_control import manipulation, suite
 from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs
 
-from env.distracting_control.suite import distracting_wrapper
-import env.fb_mtenv_dmc as fb_mtenv_dmc
+from envs.distracting_control.suite import distracting_wrapper
+import envs.fb_mtenv_dmc as fb_mtenv_dmc
 
 
 def get_unique_int(difficulty: str) -> int:
