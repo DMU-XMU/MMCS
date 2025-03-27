@@ -260,6 +260,10 @@ class MMCSAgent:
         self.actor.train(training)
         self.critic.train(training)
         self.inv_model.train(training)
+	self.masker.train(training)
+        self.linears_club_x1x2_cond.train(training)
+        self.club_x1x2_cond1.train(training)
+        self.club_x1x2_cond2.train(training)
 
     def act(self, obs, step, eval_mode):
         obs = torch.as_tensor(obs, device=self.device)
